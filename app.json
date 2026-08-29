@@ -1,1 +1,51 @@
-{"expo":{"name":"Adika Marketplace","slug":"adika-mobile","version":"1.0.0","orientation":"portrait","scheme":"adika","userInterfaceStyle":"light","newArchEnabled":false,"icon":"./assets/icon.png","splash":{"image":"./assets/splash.png","resizeMode":"contain","backgroundColor":"#16acbd"},"updates":{"enabled":false,"checkAutomatically":"NEVER","fallbackToCacheTimeout":0},"runtimeVersion":{"policy":"appVersion"},"android":{"package":"com.adika.marketplace","adaptiveIcon":{"foregroundImage":"./assets/adaptive-icon.png","backgroundColor":"#16acbd"},"permissions":["INTERNET"]},"plugins":["expo-router","expo-secure-store"],"experiments":{"typedRoutes":false}}} 
+{
+  "expo": {
+    "name": "Adika Marketplace",
+    "slug": "adika-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "adika",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#16acbd"
+    },
+    "updates": {
+      "enabled": false,
+      "checkAutomatically": "NEVER",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "android": {
+      "package": "com.adika.marketplace",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#16acbd"
+      },
+      "permissions": [
+        "INTERNET"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "de2ac1aa-dfb1-410b-b18d-8d70f420f21e"
+      }
+    },
+    "owner": "adikamobile"
+  }
+}
