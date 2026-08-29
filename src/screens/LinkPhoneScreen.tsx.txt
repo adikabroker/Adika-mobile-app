@@ -1,0 +1,76 @@
+import React, { useState } from 'react';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { linkPhoneNumber } from '../api/client';
+
+export default function LinkPhoneScreen({ onLinked }: { onLinked?: () => void }) {
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLink = async () => {
+    if (!phone || phone.length < 9) {
+      Alert.alert('ስህተት', 'እባክዎን ትክክለኛ የስልክ ቁጥር ያስገቡ');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await linkPhoneNumber(phone);
+      if (res.success) {
+        Alert.alert('ተሳክቷል!', 'አካውንትዎ ከቴሌግራም አፕልኬሽንዎ ጋር ተያይዟል');
+        if (onLinked) onLinked();
+      }
+    } catch (e) {
+      Alert.alert('ስህተት', e instanceof Error ? e.message : 'ማያያዝ አልተቻለም');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>አካውንትዎን ያያይዙ 🔗</Text>
+      <Text style={styles.subtitle}>
+        በቴሌግራም Mini App ያስመዘገቧቸውን እቃዎች እና Favorites በስልክዎ ላይ ለማግኘት ስልክ ቁጥርዎን ያስገቡ።
+      </Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="0911... ወይም 0711..."
+        placeholderTextColor="#94a3b8"
+        keyboardType="phone-pad"
+        value={phone}
+        onChangeText={setPhone}
+      />
+
+      <Pressable style={styles.button} onPress={handleLink} disabled={loading}>
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>አካውንት አያይዝ</Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { padding: 20, backgroundColor: '#ffffff', borderRadius: 16, margin: 16 },
+  title: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 8 },
+  subtitle: { fontSize: 13, color: '#64748b', marginBottom: 16, lineHeight: 18 },
+  input: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    marginBottom: 16,
+  },
+  button: {
+    backgroundColor: '#16acbd',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  buttonText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
+});
