@@ -12,7 +12,9 @@ import {
   StyleSheet,
   ActivityIndicator,
   TextInput,
+  TouchableOpacity,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { ListingCard } from '../../src/components/ListingCard';
 import { clearApiCache, fetchListings } from '../../src/api/client';
 import type { Listing, ListingCategory, ReqType } from '../../src/types/listing';
@@ -25,6 +27,7 @@ const FILTERS: { id: ListingCategory; label: string }[] = [
 ];
 
 export default function MarketplaceScreen() {
+  const router = useRouter();
   const [tab, setTab] = useState<ReqType>('SELL');
   const [category, setCategory] = useState<ListingCategory>('');
   const [q, setQ] = useState('');
@@ -96,6 +99,13 @@ export default function MarketplaceScreen() {
   const onEndReached = () => {
     if (loading || loadingMore || refreshing || !hasMore) return;
     load({ pageToLoad: page + 1 });
+  };
+
+  const handlePressItem = (item: Listing) => {
+    router.push({
+      pathname: `/listing/${item.id}`,
+      params: { itemData: JSON.stringify(item) },
+    });
   };
 
   return (
@@ -186,11 +196,19 @@ export default function MarketplaceScreen() {
           removeClippedSubviews
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={styles.emptyTitle}>No listings found</Text>
+              <Text style={styles.emptyTitle}>ምንም ዝርዝር አልተገኘም</Text>
               <Text style={styles.emptySub}>ሌላ ምድብ ይሞክሩ ወይም ይፈልጉ</Text>
             </View>
           }
-          renderItem={({ item }) => <ListingCard item={item} />}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              activeOpacity={0.8}
+              onPress={() => handlePressItem(item)}
+            >
+              <ListingCard item={item} />
+            </TouchableOpacity>
+          )}
           ListFooterComponent={
             loadingMore ? (
               <ActivityIndicator style={{ marginVertical: 16 }} color="#16acbd" />
