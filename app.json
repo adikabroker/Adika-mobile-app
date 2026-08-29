@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "scheme": "adika",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash.png",
@@ -27,32 +27,18 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#16acbd"
       },
-      "permissions": ["INTERNET", "CAMERA"],
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "adika.et",
-              "pathPrefix": "/listing"
-            },
-            {
-              "scheme": "adika",
-              "pathPrefix": "/listing"
-            }
-          ],
-          "category": ["BROWSABLE", "DEFAULT"]
-        }
-      ]
+      "permissions": ["INTERNET"]
     },
     "plugins": [
       "expo-router",
       "expo-secure-store"
     ],
+    "experiments": {
+      "typedRoutes": false
+    },
     "extra": {
       "apiBaseUrl": "https://adika-y37t.onrender.com",
+      "router": {},
       "eas": {
         "projectId": "replace-with-eas-project-id"
       }
