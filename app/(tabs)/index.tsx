@@ -78,15 +78,9 @@ export default function HomeScreen() {
     setFilteredListings(result);
   }, [selectedCategory, searchQuery, listings]);
 
-  // ካርዱ ሲነካ ወደ Detail ገጽ መላኪያ ትክክለኛ ሎጂክ
+  // ካርዱ ሲነካ ወደ Detail ገጽ መላኪያ የተስተካከለ ሎጂክ
   const handleItemPress = (item: Listing) => {
-    router.push({
-      pathname: '/listing/[id]',
-      params: {
-        id: String(item.id),
-        itemData: JSON.stringify(item),
-      },
-    });
+    router.push(`/listing/${item.id}`);
   };
 
   const renderCard = ({ item }: { item: Listing }) => {
@@ -124,7 +118,7 @@ export default function HomeScreen() {
           <Text style={styles.headerTabTextActive}>🛒 ገበያ</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.headerTab}>
-          <Text style={styles.headerTabText}>📋  my orders</Text>
+          <Text style={styles.headerTabText}>📋 my orders</Text>
         </TouchableOpacity>
       </View>
 
