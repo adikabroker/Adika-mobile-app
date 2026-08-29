@@ -101,7 +101,7 @@ export default function ListingDetailScreen() {
 
         <View style={styles.content}>
           <View style={styles.tagRow}>
-            <Text style={styles.categoryBadge}>{item.category || 'عام'}</Text>
+            <Text style={styles.categoryBadge}>{item.category || 'General'}</Text>
           </View>
 
           <Text style={styles.title}>{item.title}</Text>
