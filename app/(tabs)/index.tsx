@@ -1,254 +1,275 @@
-import React, { useEffect, useState } from 'react';
+/**
+ * Marketplace feed — Facebook Marketplace style retention UX
+ * SELL/BUY tabs · Amharic chips · 2-col grid · pull-to-refresh · local cache
+ */
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
-  Image,
-  TouchableOpacity,
-  TextInput,
-  ActivityIndicator,
-  SafeAreaView,
   RefreshControl,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+  TextInput,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { ListingCard } from '../../src/components/ListingCard';
+import { clearApiCache, fetchListings } from '../../src/api/client';
+import type { Listing, ListingCategory, ReqType } from '../../src/types/listing';
 
-interface Listing {
-  id: string | number;
-  title: string;
-  price: string | number;
-  category: string;
-  image?: string;
-  description?: string;
-  phone_number?: string;
-  location?: string;
-}
+const FILTERS: { id: ListingCategory; label: string }[] = [
+  { id: '', label: '✨ ሁሉም' },
+  { id: 'መኪና', label: '🚗 መኪና' },
+  { id: 'ቤት', label: '🏠 ቤት' },
+  { id: 'ንግድ', label: '🏢 ንግድ' },
+];
 
-const CATEGORIES = ['ሁሉም', 'መኪና', 'ቤት', 'ንግድ'];
+export default function MarketplaceScreen() {
+  const [tab, setTab] = useState<ReqType>('SELL');
+  const [category, setCategory] = useState<ListingCategory>('');
+  const [q, setQ] = useState('');
+  const [items, setItems] = useState<Listing[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const requestId = useRef(0);
 
-export default function HomeScreen() {
-  const router = useRouter();
-  const [listings, setListings] = useState<Listing[]>([]);
-  const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>('ሁሉም');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const load = useCallback(
+    async (opts: {
+      pageToLoad?: number;
+      search?: string;
+      forceRefresh?: boolean;
+    } = {}) => {
+      const pageToLoad = opts.pageToLoad ?? 1;
+      const searchQ = opts.search !== undefined ? opts.search : q;
+      const rid = ++requestId.current;
 
-  const fetchListings = async () => {
-    try {
-      const response = await fetch('https://adika-y37t.onrender.com/api/explorer/listings');
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setListings(data);
-        setFilteredListings(data);
+      try {
+        if (pageToLoad === 1 && !opts.forceRefresh) setLoading(true);
+        if (pageToLoad > 1) setLoadingMore(true);
+        setError(null);
+
+        const res = await fetchListings({
+          page: pageToLoad,
+          limit: 20,
+          type: tab,
+          category: category || undefined,
+          q: searchQ.trim() || undefined,
+          forceRefresh: opts.forceRefresh,
+        });
+
+        if (rid !== requestId.current) return;
+
+        setItems((prev) => (pageToLoad === 1 ? res.items : [...prev, ...res.items]));
+        setHasMore(res.hasMore);
+        setPage(pageToLoad);
+        setFromCache(!!res.fromCache);
+      } catch (e) {
+        if (rid !== requestId.current) return;
+        setError(e instanceof Error ? e.message : 'መጫን አልተቻለም');
+        if (pageToLoad === 1) setItems([]);
+      } finally {
+        if (rid === requestId.current) {
+          setLoading(false);
+          setRefreshing(false);
+          setLoadingMore(false);
+        }
       }
-    } catch (error) {
-      console.error('Error fetching listings:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+    },
+    [tab, category, q]
+  );
 
   useEffect(() => {
-    fetchListings();
-  }, []);
+    load({ pageToLoad: 1 });
+  }, [tab, category]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchListings();
+    await clearApiCache();
+    load({ pageToLoad: 1, forceRefresh: true });
   };
 
-  useEffect(() => {
-    let result = listings;
-
-    if (selectedCategory !== 'ሁሉም') {
-      result = result.filter(
-        (item) => item.category && item.category.toLowerCase() === selectedCategory.toLowerCase()
-      );
-    }
-
-    if (searchQuery.trim() !== '') {
-      result = result.filter((item) =>
-        item.title.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    setFilteredListings(result);
-  }, [selectedCategory, searchQuery, listings]);
-
-  // ካርዱ ሲነካ ወደ Detail ገጽ መላኪያ የተስተካከለ ሎጂክ
-  const handleItemPress = (item: Listing) => {
-    router.push(`/listing/${item.id}`);
-  };
-
-  const renderCard = ({ item }: { item: Listing }) => {
-    const placeholderImage = 'https://via.placeholder.com/300x200.png?text=No+Image';
-
-    return (
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.8}
-        onPress={() => handleItemPress(item)}
-      >
-        <Image
-          source={{ uri: item.image || placeholderImage }}
-          style={styles.cardImage}
-          resizeMode="cover"
-        />
-        <View style={styles.cardContent}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={styles.cardPrice}>
-            💰 {typeof item.price === 'number' ? `${item.price.toLocaleString()} ETB` : item.price}
-          </Text>
-          <Text style={styles.cardCategory}>{item.category || 'General'}</Text>
-        </View>
-      </TouchableOpacity>
-    );
+  const onEndReached = () => {
+    if (loading || loadingMore || refreshing || !hasMore) return;
+    load({ pageToLoad: page + 1 });
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Top Header Tabs */}
-      <View style={styles.topHeader}>
-        <TouchableOpacity style={[styles.headerTab, styles.headerTabActive]}>
-          <Text style={styles.headerTabTextActive}>🛒 ገበያ</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.headerTab}>
-          <Text style={styles.headerTabText}>📋 my orders</Text>
-        </TouchableOpacity>
+    <View style={styles.root}>
+      <View style={styles.tabs}>
+        <Pressable
+          onPress={() => setTab('SELL')}
+          style={[styles.tabBtn, tab === 'SELL' && styles.tabBtnActive]}
+        >
+          <Text style={[styles.tabText, tab === 'SELL' && styles.tabTextActive]}>
+            🛒 ገበያ
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setTab('BUY')}
+          style={[styles.tabBtn, tab === 'BUY' && styles.tabBtnActive]}
+        >
+          <Text style={[styles.tabText, tab === 'BUY' && styles.tabTextActive]}>
+            📋 ገዢዎች
+          </Text>
+        </Pressable>
       </View>
 
-      {/* Search Input */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="ፈልግ... (ሞዴል፣ ቦታ፣ ዋጋ)"
-          placeholderTextColor="#94a3b8"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+      <TextInput
+        style={styles.search}
+        placeholder="ፈልግ… (ሞዴል፣ ቦታ፣ ዋጋ)"
+        placeholderTextColor="#94a3b8"
+        value={q}
+        onChangeText={setQ}
+        onSubmitEditing={() => load({ pageToLoad: 1, search: q, forceRefresh: true })}
+        returnKeyType="search"
+      />
+
+      <View style={styles.chips}>
+        {FILTERS.map((f) => {
+          const active = category === f.id;
+          return (
+            <Pressable
+              key={f.id || 'all'}
+              onPress={() => setCategory(f.id)}
+              style={[styles.chip, active && styles.chipActive]}
+            >
+              <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                {f.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
-      {/* Categories Horizontal Scroll */}
-      <View style={styles.categoryContainer}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={CATEGORIES}
-          keyExtractor={(item) => item}
-          renderItem={({ item }) => {
-            const isActive = selectedCategory === item;
-            return (
-              <TouchableOpacity
-                style={[styles.categoryBadge, isActive && styles.categoryBadgeActive]}
-                onPress={() => setSelectedCategory(item)}
-              >
-                <Text style={[styles.categoryText, isActive && styles.categoryTextActive]}>
-                  {item === 'ሁሉም' ? '✨ ሁሉም' : item === 'መኪና' ? '🚗 መኪና' : item === 'ቤት' ? '🏠 ቤት' : '🏢 ንግድ'}
-                </Text>
-              </TouchableOpacity>
-            );
-          }}
-          contentContainerStyle={{ paddingHorizontal: 16 }}
-        />
-      </View>
+      {fromCache && items.length > 0 ? (
+        <Text style={styles.cacheHint}>⚡ ከካሽ ተጭኗል · በጀርባ ይዘምናል</Text>
+      ) : null}
 
-      {/* Main Listings Grid */}
-      {loading ? (
+      {error ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable onPress={() => load({ pageToLoad: 1, forceRefresh: true })}>
+            <Text style={styles.retry}>እንደገና ሞክር</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {loading && items.length === 0 ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#16acbd" />
-          <Text style={{ marginTop: 10, color: '#64748b' }}>መረጃዎች በመጫን ላይ...</Text>
+          <ActivityIndicator color="#16acbd" size="large" />
+          <Text style={styles.loadingLabel}>ዝርዝር በመጫን ላይ…</Text>
         </View>
       ) : (
         <FlatList
-          data={filteredListings}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderCard}
+          data={items}
+          keyExtractor={(it, i) => `${it.id ?? 'x'}-${i}`}
           numColumns={2}
-          columnWrapperStyle={styles.row}
-          contentContainerStyle={{ padding: 12, paddingBottom: 80 }}
+          contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#16acbd']} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#16acbd"
+              colors={['#16acbd']}
+            />
           }
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.35}
+          windowSize={7}
+          maxToRenderPerBatch={8}
+          initialNumToRender={6}
+          removeClippedSubviews
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={{ fontSize: 15, color: '#64748b', marginTop: 40 }}>
-                ምንም የተገኘ እቃ የለም
-              </Text>
+              <Text style={styles.emptyTitle}>No listings found</Text>
+              <Text style={styles.emptySub}>ሌላ ምድብ ይሞክሩ ወይም ይፈልጉ</Text>
             </View>
+          }
+          renderItem={({ item }) => <ListingCard item={item} />}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator style={{ marginVertical: 16 }} color="#16acbd" />
+            ) : (
+              <View style={{ height: 28 }} />
+            )
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#e0f7fa' },
-  topHeader: {
+  root: { flex: 1, backgroundColor: '#ecfeff' },
+  tabs: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    gap: 10,
+    marginHorizontal: 12,
+    marginTop: 10,
+    backgroundColor: '#16acbd',
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
   },
-  headerTab: {
-    flex: 1,
+  tabBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
+  tabBtnActive: { backgroundColor: '#ffffff' },
+  tabText: { color: '#ffffff', fontWeight: '700', fontSize: 13 },
+  tabTextActive: { color: '#0e7490' },
+  search: {
+    marginHorizontal: 12,
+    marginTop: 10,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-  },
-  headerTabActive: { backgroundColor: '#16acbd' },
-  headerTabText: { fontWeight: 'bold', color: '#16acbd' },
-  headerTabTextActive: { fontWeight: 'bold', color: '#ffffff' },
-
-  searchContainer: { paddingHorizontal: 16, marginTop: 10 },
-  searchInput: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     fontSize: 14,
     color: '#0f172a',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
   },
-
-  categoryContainer: { marginTop: 12, height: 40 },
-  categoryBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#a5f3fc',
+  },
+  chipActive: {
     backgroundColor: '#ffffff',
-    marginRight: 8,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#16acbd',
   },
-  categoryBadgeActive: { backgroundColor: '#16acbd', borderColor: '#16acbd' },
-  categoryText: { fontSize: 13, color: '#475569', fontWeight: '600' },
-  categoryTextActive: { color: '#ffffff' },
-
-  row: { justifyContent: 'space-between', marginBottom: 12 },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    width: '48%',
-    overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+  chipText: { fontSize: 12, fontWeight: '700', color: '#0e7490' },
+  chipTextActive: { color: '#0f766e' },
+  cacheHint: {
+    marginHorizontal: 14,
+    marginBottom: 4,
+    fontSize: 11,
+    color: '#0e7490',
+    fontWeight: '600',
   },
-  cardImage: { width: '100%', height: 130, backgroundColor: '#f1f5f9' },
-  cardContent: { padding: 10 },
-  cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#0f172a' },
-  cardPrice: { fontSize: 13, fontWeight: '700', color: '#16acbd', marginTop: 4 },
-  cardCategory: { fontSize: 11, color: '#64748b', marginTop: 2 },
-
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  list: { paddingHorizontal: 7, paddingBottom: 28, flexGrow: 1 },
+  center: { paddingTop: 72, alignItems: 'center', paddingHorizontal: 24 },
+  loadingLabel: { marginTop: 10, color: '#0e7490', fontWeight: '600', fontSize: 13 },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#334155' },
+  emptySub: { marginTop: 6, fontSize: 13, color: '#94a3b8', textAlign: 'center' },
+  errorBox: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    backgroundColor: '#fef2f2',
+    padding: 10,
+    borderRadius: 10,
+  },
+  errorText: { color: '#b91c1c', fontSize: 12, fontWeight: '600' },
+  retry: { marginTop: 6, color: '#0e7490', fontWeight: '800', fontSize: 12 },
 });
