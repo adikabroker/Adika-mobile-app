@@ -27,9 +27,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#16acbd"
       },
-      "permissions": [
-        "INTERNET"
-      ]
+      "permissions": ["INTERNET"]
     },
     "plugins": [
       "expo-router",
@@ -39,13 +37,11 @@
       "typedRoutes": false
     },
     "extra": {
-      "router": {
-        "origin": false
-      },
+      "apiBaseUrl": "https://adika-y37t.onrender.com",
+      "router": {},
       "eas": {
-        "projectId": "de2ac1aa-dfb1-410b-b18d-8d70f420f21e"
+        "projectId": "replace-with-eas-project-id"
       }
-    },
-    "owner": "adikamobile"
+    }
   }
 }
