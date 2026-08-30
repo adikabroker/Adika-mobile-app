@@ -1,185 +1,217 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  Image,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Linking,
   ActivityIndicator,
-  SafeAreaView,
+  Share,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import {
+  API_BASE,
+  fetchListings,
+  formatPrice,
+  getListingImageUrl,
+  listingTitle,
+} from '../../src/api/client';
+import type { Listing } from '../../src/types/listing';
 
-interface ListingDetail {
-  id: string | number;
-  title: string;
-  price: string | number;
-  category: string;
-  image?: string;
-  description?: string;
-  phone_number?: string;
-  location?: string;
-}
-
+/**
+ * Route: /listing/[id]
+ * Deep links: adika://listing/902  OR  https://adika.et/listing/902
+ */
 export default function ListingDetailScreen() {
-  const { id, itemData } = useLocalSearchParams();
   const router = useRouter();
+  const raw = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = useMemo(() => {
+    const v = raw.id;
+    if (Array.isArray(v)) return String(v[0] || '');
+    return String(v || '').trim();
+  }, [raw.id]);
 
-  const [item, setItem] = useState<ListingDetail | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [item, setItem] = useState<Listing | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (itemData && typeof itemData === 'string') {
-      try {
-        setItem(JSON.parse(itemData));
-        setLoading(false);
-        return;
-      } catch (e) {
-        console.log('Error parsing local item data', e);
-      }
+    if (!id) {
+      setError('የማስታወቂያ መለያ የለም');
+      setLoading(false);
+      return;
     }
-
-    const fetchDetail = async () => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const res = await fetch(`https://adika-y37t.onrender.com/api/explorer/listings`);
-        const data = await res.json();
-        const found = data?.find((l: any) => String(l.id) === String(id));
-        if (found) {
-          setItem(found);
+        // Prefer dedicated endpoint if available; else search list pages
+        const tryUrls = [
+          `${API_BASE.replace(/\/$/, '')}/api/explorer/listings?id=${encodeURIComponent(id)}&limit=1`,
+          `${API_BASE.replace(/\/$/, '')}/api/listings?id=${encodeURIComponent(id)}`,
+        ];
+        let found: Listing | null = null;
+        for (const url of tryUrls) {
+          try {
+            const res = await fetch(url, { headers: { Accept: 'application/json' } });
+            if (!res.ok) continue;
+            const data = await res.json();
+            const items: Listing[] = data.items || data.listings || (data.id ? [data] : []);
+            const match = items.find((x) => String(x.id) === String(id));
+            if (match) {
+              found = match;
+              break;
+            }
+            if (items[0] && String(items[0].id) === String(id)) {
+              found = items[0];
+              break;
+            }
+          } catch {
+            /* next */
+          }
         }
-      } catch (err) {
-        console.error('Fetch detail error:', err);
+        if (!found) {
+          // Fallback: first pages of SELL feed
+          for (const page of [1, 2, 3]) {
+            const res = await fetchListings({ page, limit: 50, type: 'SELL', forceRefresh: true });
+            const match = res.items.find((x) => String(x.id) === String(id));
+            if (match) {
+              found = match;
+              break;
+            }
+          }
+        }
+        if (!cancelled) {
+          if (found) setItem(found);
+          else setError('ማስታወቂያው አልተገኘም');
+        }
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'መጫን አልተቻለም');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
+    })();
+    return () => {
+      cancelled = true;
     };
+  }, [id]);
 
-    fetchDetail();
-  }, [id, itemData]);
+  const uri = item ? getListingImageUrl(item) : null;
+  const title = item ? listingTitle(item) : `Listing #${id}`;
+  const price = item ? formatPrice(item) : '';
+  const phone = item?.phone ? String(item.phone).replace(/\s/g, '') : '';
+  const cat = item?.main_category || item?.category || '';
 
-  const handleCall = () => {
-    const phoneNumber = item?.phone_number || '+251900000000';
-    Linking.openURL(`tel:${phoneNumber}`);
+  const onCall = () => {
+    if (!phone) return;
+    const tel = phone.startsWith('+') ? phone : phone.startsWith('0') ? phone : `+251${phone.replace(/^251/, '')}`;
+    Linking.openURL(`tel:${tel}`);
   };
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#16acbd" />
-        <Text style={{ marginTop: 10, color: '#666' }}>ዝርዝሩ በመጫን ላይ...</Text>
-      </View>
-    );
-  }
-
-  if (!item) {
-    return (
-      <View style={styles.center}>
-        <Text style={{ fontSize: 16, color: '#333' }}>መረጃው አልተገኘም</Text>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={{ color: '#fff', fontWeight: 'bold' }}>ተመለስ</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const placeholderImage = 'https://via.placeholder.com/400x300.png?text=No+Image';
+  const onShare = async () => {
+    try {
+      await Share.share({
+        message: `${title}\n${price}\nhttps://adika.et/listing/${id}`,
+        url: `https://adika.et/listing/${id}`,
+      });
+    } catch {
+      /* ignore */
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 90 }}>
-        <TouchableOpacity style={styles.floatingBack} onPress={() => router.back()}>
-          <Text style={styles.backText}>‹ ተመለስ</Text>
-        </TouchableOpacity>
-
-        <Image
-          source={{ uri: item.image || placeholderImage }}
-          style={styles.image}
-          resizeMode="cover"
-        />
-
-        <View style={styles.content}>
-          <View style={styles.tagRow}>
-            <Text style={styles.categoryBadge}>{item.category || 'General'}</Text>
+    <>
+      <Stack.Screen options={{ title: title.slice(0, 28) || 'ዝርዝር' }} />
+      <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#16acbd" />
+            <Text style={styles.loadingText}>ዝርዝር በመጫን ላይ…</Text>
           </View>
-
-          <Text style={styles.title}>{item.title}</Text>
-
-          <Text style={styles.price}>
-            {typeof item.price === 'number'
-              ? `${item.price.toLocaleString()} ETB`
-              : `${item.price} ETB`}
-          </Text>
-
-          <View style={styles.divider} />
-
-          <Text style={styles.sectionHeader}>መግለጫ (Description)</Text>
-          <Text style={styles.description}>
-            {item.description || 'ለዚህ እቃ ወይም ንብረት የተሰጠ ተጨማሪ መግለጫ የለም። ለበለጠ መረጃ ደውለው ይወቁ።'}
-          </Text>
-
-          {item.location && (
-            <View style={{ marginTop: 15 }}>
-              <Text style={styles.sectionHeader}>ቦታ (Location)</Text>
-              <Text style={styles.locationText}>📍 {item.location}</Text>
+        ) : error ? (
+          <View style={styles.center}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable style={styles.btnSecondary} onPress={() => router.back()}>
+              <Text style={styles.btnSecondaryText}>← ተመለስ</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <View style={styles.imageWrap}>
+              {uri ? (
+                <Image source={{ uri }} style={styles.image} contentFit="cover" />
+              ) : (
+                <View style={[styles.image, styles.placeholder]}>
+                  <Text style={styles.placeholderText}>Adika</Text>
+                </View>
+              )}
             </View>
-          )}
-        </View>
-      </ScrollView>
 
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.callButton} onPress={handleCall}>
-          <Text style={styles.callButtonText}>📞 አሁኑኑ ይደውሉ</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+            <View style={styles.body}>
+              <Text style={styles.title}>{title}</Text>
+              <Text style={styles.price}>💰 {price}</Text>
+              {!!cat && <Text style={styles.cat}>{cat}</Text>}
+              <Text style={styles.id}>#{id}</Text>
+
+              {!!item?.description && (
+                <Text style={styles.desc}>{String(item.description).slice(0, 1200)}</Text>
+              )}
+
+              <View style={styles.actions}>
+                {!!phone && (
+                  <Pressable style={styles.btnPrimary} onPress={onCall}>
+                    <Text style={styles.btnPrimaryText}>📞 ደውል</Text>
+                  </Pressable>
+                )}
+                <Pressable style={styles.btnSecondary} onPress={onShare}>
+                  <Text style={styles.btnSecondaryText}>🔗 አጋራ</Text>
+                </Pressable>
+                <Pressable style={styles.btnSecondary} onPress={() => router.back()}>
+                  <Text style={styles.btnSecondaryText}>← ተመለስ</Text>
+                </Pressable>
+              </View>
+            </View>
+          </>
+        )}
+      </ScrollView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  floatingBack: {
-    position: 'absolute',
-    top: 40,
-    left: 16,
-    zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  backText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  image: { width: '100%', height: 280, backgroundColor: '#e2e8f0' },
-  content: { padding: 20 },
-  tagRow: { flexDirection: 'row', marginBottom: 8 },
-  categoryBadge: {
-    backgroundColor: '#e0f2fe',
-    color: '#0369a1',
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  root: { flex: 1, backgroundColor: '#ecfeff' },
+  content: { paddingBottom: 40 },
+  center: { paddingTop: 80, alignItems: 'center', paddingHorizontal: 24 },
+  loadingText: { marginTop: 12, color: '#0e7490', fontWeight: '600' },
+  errorText: { color: '#b91c1c', fontWeight: '700', textAlign: 'center', marginBottom: 16 },
+  imageWrap: { width: '100%', aspectRatio: 4 / 3, backgroundColor: '#e2e8f0' },
+  image: { width: '100%', height: '100%' },
+  placeholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#cffafe' },
+  placeholderText: { color: '#0e7490', fontWeight: '800' },
+  body: { padding: 16, gap: 8 },
+  title: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  price: { fontSize: 18, fontWeight: '800', color: '#0e7490' },
+  cat: { fontSize: 13, color: '#64748b', fontWeight: '600' },
+  id: { fontSize: 12, color: '#94a3b8' },
+  desc: { marginTop: 8, fontSize: 14, lineHeight: 22, color: '#334155' },
+  actions: { marginTop: 20, gap: 10 },
+  btnPrimary: {
+    backgroundColor: '#16acbd',
+    paddingVertical: 14,
     borderRadius: 12,
+    alignItems: 'center',
   },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#0f172a', marginBottom: 8 },
-  price: { fontSize: 20, fontWeight: '700', color: '#16acbd', marginBottom: 16 },
-  divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 12 },
-  sectionHeader: { fontSize: 15, fontWeight: '600', color: '#475569', marginBottom: 6 },
-  description: { fontSize: 14, color: '#334155', lineHeight: 22 },
-  locationText: { fontSize: 14, color: '#64748b' },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+  btnPrimaryText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  btnSecondary: {
+    backgroundColor: '#fff',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  callButton: { backgroundColor: '#16acbd', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  callButtonText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
-  backBtn: { marginTop: 15, backgroundColor: '#16acbd', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
+  btnSecondaryText: { color: '#0e7490', fontWeight: '700', fontSize: 15 },
 });
