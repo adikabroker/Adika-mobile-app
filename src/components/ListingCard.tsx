@@ -22,7 +22,13 @@ export function ListingCard({ item, onPress }: Props) {
       onPress(item);
       return;
     }
-    router.push(`/listing/${item.id}`);
+    const lid = item?.id;
+    if (lid === undefined || lid === null || lid === '') return;
+    // In-app route only — do NOT use Linking.openURL('adika://...')
+    router.push({
+      pathname: '/listing/[id]',
+      params: { id: String(lid) },
+    });
   };
 
   return (
