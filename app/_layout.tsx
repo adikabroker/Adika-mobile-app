@@ -1,44 +1,65 @@
-import 'react-native-gesture-handler';
-import React, { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View, Text, StyleSheet } from 'react-native';
+import { Tabs } from 'expo-router';
+import { Text, View } from 'react-native';
 
-export default function RootLayout() {
-  const [ready, setReady] = useState(true);
-
-  if (!ready) {
-    return (
-      <View style={styles.boot}>
-        <ActivityIndicator size="large" color="#16acbd" />
-        <Text style={styles.bootTitle}>Adika</Text>
-      </View>
-    );
-  }
-
+function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
-    <>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-    </>
+    <View style={{ alignItems: 'center', opacity: focused ? 1 : 0.55 }}>
+      <Text style={{ fontSize: 18 }}>{emoji}</Text>
+    </View>
   );
 }
 
-const styles = StyleSheet.compile
-  ? {}
-  : StyleSheet.create({
-      boot: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#16acbd',
-      },
-      bootTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#ffffff',
-        marginTop: 10,
-      },
-    });
+export default function TabsLayout() {
+  return (
+    <Tabs
+      screenOptions={{
+        headerStyle: { backgroundColor: '#16acbd' },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '800' },
+        tabBarActiveTintColor: '#0e7490',
+        tabBarInactiveTintColor: '#94a3b8',
+        tabBarStyle: {
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 6,
+          backgroundColor: '#fff',
+          borderTopColor: '#e2e8f0',
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Adika ገበያ',
+          tabBarLabel: 'ገበያ',
+          tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="tools"
+        options={{
+          title: 'Tools & Advisor',
+          tabBarLabel: 'AI / መሣሪያ',
+          tabBarIcon: ({ focused }) => <TabIcon emoji="⚡" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="inbox"
+        options={{
+          title: 'Inbox',
+          tabBarLabel: 'Inbox',
+          tabBarIcon: ({ focused }) => <TabIcon emoji="💬" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="sell"
+        options={{
+          title: 'ለጥፍ',
+          tabBarLabel: 'ለጥፍ',
+          tabBarIcon: ({ focused }) => <TabIcon emoji="➕" focused={focused} />,
+        }}
+      />
+    </Tabs>
+  );
+}
